@@ -57,7 +57,6 @@
 -export([insert/2, delete/2, keys/1, diff/2]).
 -export([dist_diff/2, access_serialize/1, access_unserialize/1]).
 
--define(HASH, sha).
 -define(HASHBYTES, 20).
 
 -define(VSN, 1).
@@ -312,11 +311,11 @@ to_leaf(Key, Value) when is_binary(Key) ->
     %% but not the 'hashkey'. This allows a tree where the structure
     %% is based on the keys, but we can still compare and use both
     %% the key and its value to do comparison when diffing.
-    HashKey = crypto:hash(?HASH, Key),
-    HashVal = crypto:hash(?HASH, Value),
+    HashKey = <<(erlang:crc32(Key)):32>>,
+    HashVal = <<(erlang:crc32(Value)):32>>,
     #leaf{userkey=Key,
           hashkey=HashKey,
-          hash=crypto:hash(?HASH, <<HashKey/binary, HashVal/binary>>)}.
+          hash = <<(erlang:crc32(<<HashKey/binary, HashVal/binary>>)):32>>}.
 
 %% @doc We build a Key-Value list of the child nodes and their offset
 %% to be used as a sparse K-ary tree.
@@ -344,10 +343,10 @@ children_hash(Children) ->
              #inner{hashchildren=HashChildren} -> HashChildren;
              #leaf{hash=Hash} -> Hash
          end || {_Offset, Child} <- Children]
-    ),
-    crypto:hash_final(lists:foldl(fun(K, H) -> crypto:hash_update(H, K) end,
-                                  crypto:hash_init(?HASH),
-                                  Hashes)).
+    ),    
+    <<(lists:foldl(fun(K, H) -> erlang:crc32(H, K) end,
+                erlang:crc32(hd(Hashes)),
+                tl(Hashes))):32>>.
 
 %% @doc Checks if the node can be shrunken down to a single leaf it contains
 %% or should just be returned as is.
